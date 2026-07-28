@@ -1,1 +1,10 @@
 merged_master_dataset.csv
+
+venv/
+models/*.pkl
+models/*.index
+__pycache__/
+*.pyc
+.venv/
+env/
+.streamlit/secrets.toml
