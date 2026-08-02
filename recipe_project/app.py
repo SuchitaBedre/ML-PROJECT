@@ -207,6 +207,100 @@ st.markdown("""
     .empty-hint-icon { font-size: 1.8rem; opacity: 0.7; }
     .empty-hint b { color: var(--ink); }
 
+    /* ---- Next-level polish: micro-interactions ---- */
+    .stat-card, .panel {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        animation: fadeSlideIn 0.4s ease-out;
+    }
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    }
+    @keyframes fadeSlideIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .stButton > button {
+        transition: transform 0.12s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+    .stButton > button:active {
+        transform: scale(0.97);
+    }
+    .stButton > button:hover {
+        box-shadow: 0 6px 16px rgba(232,84,46,0.35);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .chat-row {
+        animation: bubbleIn 0.25s ease-out;
+    }
+    @keyframes bubbleIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .badge {
+        animation: badgePop 0.3s ease-out;
+    }
+    @keyframes badgePop {
+        0% { transform: scale(0.85); opacity: 0; }
+        70% { transform: scale(1.04); }
+        100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ---- Next-level polish: typography ---- */
+    .stat-label {
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 0.72rem !important;
+    }
+    .stat-value {
+        letter-spacing: -0.02em;
+    }
+    .panel-title {
+        letter-spacing: -0.01em;
+    }
+    .why-title {
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.78rem !important;
+    }
+
+    /* ---- Next-level polish: stat card accent borders ---- */
+    .stat-card {
+        position: relative;
+        overflow: hidden;
+        border-left: 3px solid var(--orange);
+    }
+    .stat-card.accent-green { border-left-color: var(--green); }
+    .stat-card.accent-purple { border-left-color: var(--purple); }
+    .stat-card.accent-orange { border-left-color: var(--orange); }
+
+    /* ---- Next-level polish: chart panel fade ---- */
+    .js-plotly-plot {
+        animation: fadeSlideIn 0.5s ease-out;
+    }
+
+    /* ---- Next-level polish: prediction result pulse ---- */
+    .result-glow-good {
+        animation: glowGreen 1.8s ease-in-out infinite;
+    }
+    .result-glow-poor {
+        animation: glowAmber 1.8s ease-in-out infinite;
+    }
+    @keyframes glowGreen {
+        0%, 100% { box-shadow: 0 0 0 rgba(22,163,74,0); }
+        50% { box-shadow: 0 0 16px rgba(22,163,74,0.25); }
+    }
+    @keyframes glowAmber {
+        0%, 100% { box-shadow: 0 0 0 rgba(217,119,6,0); }
+        50% { box-shadow: 0 0 16px rgba(217,119,6,0.25); }
+    }
+
     footer {visibility: hidden;}
     #MainMenu {visibility: hidden;}
 </style>
@@ -389,9 +483,10 @@ with tab1:
                 predicted_stars = min(5.0, max(0.0, predicted_stars))
 
                 status_label = "High Potential" if prediction == 1 else "Needs Improvement"
+                glow_class = "result-glow-good" if prediction == 1 else "result-glow-poor"
 
                 st.markdown(f"""
-                <div class="panel">
+                <div class="panel {glow_class}">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
                         <span class="badge badge-green">Prediction Result</span>
                         <span class="badge badge-green">{status_label}</span>
@@ -448,15 +543,15 @@ with tab2:
 
     s1, s2, s3, s4 = st.columns(4)
     stats = [
-        ("Average Rating", "4.35", "+0.18 vs last period", s1),
-        ("Total Recipes", "231,637", "+8.6% vs last period", s2),
-        ("High Rated Recipes", "1,003,724", "+12.4% vs last period", s3),
-        ("Model ROC-AUC", "60.7%", "no-leakage model", s4),
+        ("Average Rating", "4.41", "declining trend since 2009", s1, "orange"),
+        ("Total Recipes", "231,636", "unique recipes in dataset", s2, "purple"),
+        ("High Rated Reviews", "1,003,724", "88.6% of all reviews", s3, "green"),
+        ("Model ROC-AUC", "60.7%", "no-leakage model", s4, "orange"),
     ]
-    for label, value, delta, col in stats:
+    for label, value, delta, col, accent in stats:
         with col:
             st.markdown(f"""
-                <div class="stat-card">
+                <div class="stat-card accent-{accent}">
                     <div class="stat-label">{label}</div>
                     <div class="stat-value">{value}</div>
                     <div class="stat-delta">{delta}</div>
@@ -470,7 +565,7 @@ with tab2:
         st.markdown('<div class="panel"><p class="panel-title" style="margin-bottom:0.8rem;">Rating Distribution</p>', unsafe_allow_html=True)
         rating_counts = pd.DataFrame({
             "Rating": ["0", "1", "2", "3", "4", "5"],
-            "Count": [60700, 12800, 14100, 40800, 187300, 815700]
+            "Count": [60846, 12818, 14123, 40855, 187360, 816364]
         })
         fig_bar = go.Figure(go.Bar(
             x=rating_counts["Rating"], y=rating_counts["Count"],
@@ -482,22 +577,22 @@ with tab2:
         st.markdown("</div>", unsafe_allow_html=True)
 
     with c2:
-        st.markdown('<div class="panel"><p class="panel-title" style="margin-bottom:0.8rem;">Rating Trend (sample)</p>', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><p class="panel-title" style="margin-bottom:0.8rem;">Rating Trend by Year</p>', unsafe_allow_html=True)
         trend = pd.DataFrame({
-            "Week": ["W1", "W2", "W3", "W4", "W5", "W6"],
-            "Avg Rating": [4.2, 4.25, 4.3, 4.28, 4.33, 4.35]
+            "Year": ["2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018"],
+            "Avg Rating": [4.52, 4.45, 4.31, 4.33, 4.25, 4.13, 4.03, 3.95, 3.37, 3.51]
         })
         fig_line = go.Figure(go.Scatter(
-            x=trend["Week"], y=trend["Avg Rating"], mode="lines+markers",
+            x=trend["Year"], y=trend["Avg Rating"], mode="lines+markers",
             line=dict(color="#FF7A3D", width=3), marker=dict(size=7)
         ))
         fig_line.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10),
                                 paper_bgcolor="rgba(255,255,255,0.97)", plot_bgcolor="rgba(255,255,255,0)",
-                                yaxis=dict(range=[3.8, 4.6]))
+                                yaxis=dict(range=[3.0, 4.7]))
         st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.caption("Sample values shown above -- replace with live SQL queries from your recipe_summary table.")
+    st.caption("Real values computed from 1.13M reviews across 231,636 recipes.")
 
 # ---------------------------------------------------------
 # TAB 3 -- AI Assistant
@@ -546,9 +641,7 @@ with tab3:
 
     if prompt := st.chat_input("Ask a question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        if "last_retrieved" not in st.session_state:
-            st.session_state.last_retrieved = None
-        response, st.session_state.last_retrieved = rag_chat(prompt, st.session_state.last_retrieved)
+        response = rag_chat(prompt)
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.rerun()
 
