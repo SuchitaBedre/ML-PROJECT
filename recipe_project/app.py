@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import os
 import plotly.graph_objects as go
+import xgboost as xgb
+from rag_pipeline import rag_chat
 
 # =========================================================
 # PAGE CONFIG
@@ -47,7 +49,6 @@ st.markdown("""
     .main .block-container { padding: 0 3rem 2.5rem 3rem; max-width: 1300px; }
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: var(--ink); }
 
-    /* ---- Hero banner ---- */
     .hero-banner {
         background: linear-gradient(120deg, #FF7A3D 0%, #E8542E 60%, #FF9640 100%);
         border-radius: 20px;
@@ -70,7 +71,6 @@ st.markdown("""
     .hero-title { font-size: 1.9rem; font-weight: 900; margin: 0; line-height: 1.15; color: white; letter-spacing: -0.01em; }
     .hero-sub { font-size: 0.92rem; font-weight: 600; color: rgba(255,255,255,0.95); margin-top: 2px; }
 
-    /* ---- Tabs ---- */
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
         background: rgba(255,255,255,0.6);
@@ -93,7 +93,6 @@ st.markdown("""
     .stTabs [data-baseweb="tab-highlight"] { background-color: transparent; }
     .stTabs [data-baseweb="tab-border"] { display: none; }
 
-    /* ---- Cards ---- */
     .panel {
         background: rgba(255,255,255,0.97);
         backdrop-filter: blur(8px);
@@ -112,7 +111,6 @@ st.markdown("""
     .panel-title { font-weight: 800; font-size: 1.08rem; margin: 0; }
     .panel-desc { font-size: 0.82rem; color: var(--ink-soft); margin: 0; }
 
-    /* field labels */
     .stTextArea label, .stTextInput label, .stNumberInput label {
         font-weight: 600 !important; font-size: 0.85rem !important; color: var(--ink) !important;
     }
@@ -138,7 +136,6 @@ st.markdown("""
     }
     .stButton > button:hover { opacity: 0.92; color: white; }
 
-    /* ---- Badges ---- */
     .badge {
         display: inline-flex; align-items: center; gap: 6px;
         font-size: 0.8rem; font-weight: 700;
@@ -146,12 +143,10 @@ st.markdown("""
     }
     .badge-green { background: var(--green-light); color: var(--green); }
 
-    /* ---- Why list ---- */
     .why-box { background: var(--green-light); border-radius: 12px; padding: 1rem 1.1rem; margin-top: 1rem; }
     .why-title { font-weight: 700; font-size: 0.88rem; color: #14532D; margin-bottom: 6px; }
     .why-item { font-size: 0.85rem; color: #166534; margin: 3px 0; }
 
-    /* ---- Stat cards ---- */
     .stat-card {
         background: rgba(255,255,255,0.97);
         backdrop-filter: blur(6px);
@@ -163,10 +158,8 @@ st.markdown("""
     .stat-value { font-size: 1.5rem; font-weight: 800; margin-top: 4px; }
     .stat-delta { font-size: 0.76rem; color: var(--green); margin-top: 2px; font-weight: 600; }
 
-    /* ---- Chat ---- */
     .stChatMessage { border-radius: 12px; }
 
-    /* ---- Chat box — fully custom, guaranteed solid background ---- */
     .chat-scroll {
         background: rgba(255,255,255,0.97);
         border: 1px solid var(--line);
@@ -221,29 +214,86 @@ st.markdown("""
 
 # =========================================================
 # LOAD MODEL & PREPROCESSING OBJECTS (cached)
+# NO REVIEW TEXT -- retrained to avoid data leakage for
+# predicting brand-new recipes with no reviews yet.
 # =========================================================
-MODEL_PATH = os.path.join("models", "best_model.pkl")
-TFIDF_PATH = os.path.join("models", "tfidf_vectorizer.pkl")
+MODEL_PATH = os.path.join("models", "best_model_no_review.json")
+TFIDF_ING_PATH = os.path.join("models", "tfidf_ingredients_v2.pkl")
+TFIDF_TAGS_PATH = os.path.join("models", "tfidf_tags_v2.pkl")
+SCALER_PATH = os.path.join("models", "scaler_v2.pkl")
+
+REQUIRED_PATHS = [MODEL_PATH, TFIDF_ING_PATH, TFIDF_TAGS_PATH, SCALER_PATH]
+
+NUMERIC_DEFAULTS = {
+    'calories': 313.0, 'total_fat': 20.0, 'sugar': 24.0, 'sodium': 16.0,
+    'protein': 18.0, 'saturated_fat': 23.0, 'carbohydrates': 9.0,
+}
 
 
 @st.cache_resource
 def load_model_files():
-    if not os.path.exists(MODEL_PATH) or not os.path.exists(TFIDF_PATH):
-        return None, None
-    model = pickle.load(open(MODEL_PATH, "rb"))
-    tfidf = pickle.load(open(TFIDF_PATH, "rb"))
-    return model, tfidf
+    if not all(os.path.exists(p) for p in REQUIRED_PATHS):
+        return None, None, None, None
+    model = xgb.XGBClassifier()
+    model.load_model(MODEL_PATH)
+    tfidf_ing = pickle.load(open(TFIDF_ING_PATH, "rb"))
+    tfidf_tags = pickle.load(open(TFIDF_TAGS_PATH, "rb"))
+    scaler = pickle.load(open(SCALER_PATH, "rb"))
+    return model, tfidf_ing, tfidf_tags, scaler
 
 
-model, tfidf = load_model_files()
+model, tfidf_ing, tfidf_tags, scaler = load_model_files()
 
 
-def rag_chat(query, user_type="job_seeker"):
-    return (
-        "Here are 3 ideas based on real recipes in our dataset. "
-        "Connect your real RAG pipeline (FAISS retrieval + LLM generation) "
-        "in rag_pipeline.py to replace this placeholder."
-    )
+def estimate_nutrition(ingredients_text):
+    """Rough nutrition estimate based on ingredient keywords."""
+    text = ingredients_text.lower()
+    est = dict(NUMERIC_DEFAULTS)
+
+    rich_keywords = ['butter', 'cheese', 'cream', 'oil', 'bacon', 'beef']
+    sweet_keywords = ['sugar', 'chocolate', 'honey', 'syrup', 'vanilla']
+    protein_keywords = ['chicken', 'beef', 'fish', 'egg', 'tofu', 'beans']
+    carb_keywords = ['flour', 'rice', 'pasta', 'bread', 'tortilla', 'potato']
+
+    if any(k in text for k in rich_keywords):
+        est['total_fat'] += 15
+        est['saturated_fat'] += 12
+        est['calories'] += 100
+    if any(k in text for k in sweet_keywords):
+        est['sugar'] += 20
+        est['carbohydrates'] += 15
+    if any(k in text for k in protein_keywords):
+        est['protein'] += 15
+    if any(k in text for k in carb_keywords):
+        est['carbohydrates'] += 20
+        est['calories'] += 80
+
+    return est
+
+
+def build_feature_vector(ingredients_text, tags_text, minutes, n_steps, n_ingredients_est):
+    """Rebuild the 460-column feature space (ingredients + tags + numeric, no review)."""
+    ing_vec = tfidf_ing.transform([ingredients_text])
+    tags_vec = tfidf_tags.transform([tags_text])
+
+    nutrition_est = estimate_nutrition(ingredients_text)
+
+    numeric_row = pd.DataFrame([{
+        'minutes': minutes,
+        'n_steps': n_steps,
+        'n_ingredients': n_ingredients_est,
+        'calories': nutrition_est['calories'],
+        'total_fat': nutrition_est['total_fat'],
+        'sugar': nutrition_est['sugar'],
+        'sodium': nutrition_est['sodium'],
+        'protein': nutrition_est['protein'],
+        'saturated_fat': nutrition_est['saturated_fat'],
+        'carbohydrates': nutrition_est['carbohydrates'],
+    }])
+    numeric_scaled = scaler.transform(numeric_row)
+
+    from scipy.sparse import hstack, csr_matrix
+    return hstack([ing_vec, tags_vec, csr_matrix(numeric_scaled)])
 
 
 def make_gauge(value, max_value=5):
@@ -273,7 +323,7 @@ def make_gauge(value, max_value=5):
 # =========================================================
 st.markdown("""
 <div class="hero-banner">
-    <div class="hero-icon">👨‍🍳</div>
+    <div class="hero-icon">DBDA</div>
     <div>
         <p class="hero-title">Recipe Intelligence Platform</p>
         <p class="hero-sub">Predicting recipe success and recommending dishes using ML and Generative AI</p>
@@ -284,10 +334,10 @@ st.markdown("""
 # =========================================================
 # TABS
 # =========================================================
-tab1, tab2, tab3 = st.tabs(["📈  Rating Prediction", "📊  Analytics Dashboard", "🤖  AI Assistant"])
+tab1, tab2, tab3 = st.tabs(["Rating Prediction", "Analytics Dashboard", "AI Assistant"])
 
 # ---------------------------------------------------------
-# TAB 1 — Prediction (two-column layout like the mockup)
+# TAB 1 -- Prediction
 # ---------------------------------------------------------
 with tab1:
     left, right = st.columns([1, 1], gap="medium")
@@ -296,7 +346,7 @@ with tab1:
         st.markdown("""
         <div class="panel">
             <div class="panel-head">
-                <div class="panel-icon" style="background:#FFF1E8;">🍲</div>
+                <div class="panel-icon" style="background:#FFF1E8;"></div>
                 <div>
                     <p class="panel-title">Will this recipe be well-received?</p>
                     <p class="panel-desc">Enter recipe details to predict its rating</p>
@@ -317,21 +367,21 @@ with tab1:
         with c2:
             n_steps = st.number_input("Number of steps", min_value=1, value=8)
 
-        predict_clicked = st.button("✨  Predict Rating")
+        predict_clicked = st.button("Predict Rating")
         st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
         if predict_clicked:
-            if model is None or tfidf is None:
+            if model is None:
                 st.markdown('<div class="panel">', unsafe_allow_html=True)
                 st.error(
-                    "Model files not found. Place best_model.pkl and "
-                    "tfidf_vectorizer.pkl inside the models/ folder."
+                    "Model files not found. Make sure best_model_no_review.json, tfidf_ingredients_v2.pkl, "
+                    "tfidf_tags_v2.pkl, and scaler_v2.pkl are all inside the models/ folder."
                 )
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                combined_text = f"{ingredients} {tags}"
-                features = tfidf.transform([combined_text])
+                n_ingredients_est = max(1, len([i for i in ingredients.split(",") if i.strip()]))
+                features = build_feature_vector(ingredients, tags, minutes, n_steps, n_ingredients_est)
                 prediction = model.predict(features)[0]
                 confidence = model.predict_proba(features)[0].max()
                 conf_pct = confidence * 100
@@ -343,8 +393,8 @@ with tab1:
                 st.markdown(f"""
                 <div class="panel">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
-                        <span class="badge badge-green">📈 Prediction Result</span>
-                        <span class="badge badge-green">✓ {status_label}</span>
+                        <span class="badge badge-green">Prediction Result</span>
+                        <span class="badge badge-green">{status_label}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -367,29 +417,28 @@ with tab1:
                 st.markdown(f"""
                     <div class="why-box">
                         <div class="why-title">Why this recipe will be loved</div>
-                        <div class="why-item">✓ Balanced, well-known ingredients</div>
-                        <div class="why-item">✓ Reasonable preparation time ({minutes} min)</div>
-                        <div class="why-item">✓ Manageable number of steps ({n_steps})</div>
+                        <div class="why-item">Balanced, well-known ingredients</div>
+                        <div class="why-item">Reasonable preparation time ({minutes} min)</div>
+                        <div class="why-item">Manageable number of steps ({n_steps})</div>
                     </div>
                 """, unsafe_allow_html=True)
         else:
             st.markdown("""
             <div class="panel" style="display:flex; align-items:center; justify-content:center; min-height:340px;">
                 <div style="text-align:center; color:#9CA3AF;">
-                    <div style="font-size:2.2rem; margin-bottom:8px;">📊</div>
                     <div>Fill in the recipe details and click<br><b>Predict Rating</b> to see results here</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# TAB 2 — Analytics Dashboard
+# TAB 2 -- Analytics Dashboard
 # ---------------------------------------------------------
 with tab2:
     st.markdown("""
     <div class="panel">
         <div class="panel-head">
-            <div class="panel-icon" style="background:#FFF1E8;">📊</div>
+            <div class="panel-icon" style="background:#FFF1E8;"></div>
             <div>
                 <p class="panel-title">Analytics Dashboard</p>
                 <p class="panel-desc">Insights from our recipe dataset</p>
@@ -399,10 +448,10 @@ with tab2:
 
     s1, s2, s3, s4 = st.columns(4)
     stats = [
-        ("⭐ Average Rating", "4.35", "+0.18 vs last period", s1),
-        ("📖 Total Recipes", "231,637", "+8.6% vs last period", s2),
-        ("🏆 High Rated Recipes", "1,003,724", "+12.4% vs last period", s3),
-        ("🎯 Model Accuracy", "—%", "connect model metrics", s4),
+        ("Average Rating", "4.35", "+0.18 vs last period", s1),
+        ("Total Recipes", "231,637", "+8.6% vs last period", s2),
+        ("High Rated Recipes", "1,003,724", "+12.4% vs last period", s3),
+        ("Model ROC-AUC", "60.7%", "no-leakage model", s4),
     ]
     for label, value, delta, col in stats:
         with col:
@@ -448,16 +497,16 @@ with tab2:
         st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.caption("Sample values shown above — replace with live SQL queries from your recipe_summary table.")
+    st.caption("Sample values shown above -- replace with live SQL queries from your recipe_summary table.")
 
 # ---------------------------------------------------------
-# TAB 3 — AI Assistant
+# TAB 3 -- AI Assistant
 # ---------------------------------------------------------
 with tab3:
     st.markdown("""
     <div class="panel">
         <div class="panel-head">
-            <div class="panel-icon" style="background:#F5F3FF;">🤖</div>
+            <div class="panel-icon" style="background:#F5F3FF;"></div>
             <div>
                 <p class="panel-title">AI Recipe Assistant</p>
                 <p class="panel-desc">Ask anything about recipes, ingredients, or cooking</p>
@@ -468,38 +517,38 @@ with tab3:
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Build the chat log as one block of custom HTML so the background
-    # is guaranteed solid, regardless of Streamlit's internal container markup.
     if not st.session_state.messages:
         bubbles_html = (
-            '<div class="empty-hint"><span class="empty-hint-icon">🍽️</span>'
+            '<div class="empty-hint"><span class="empty-hint-icon"></span>'
             'Ask me anything about recipes<br>'
-            'Try: <b>&ldquo;Suggest some high-protein vegetarian dinner recipes&rdquo;</b></div>'
+            'Try: <b>quick vegetarian dinner</b></div>'
         )
     else:
         bubble_parts = []
         for msg in st.session_state.messages:
             if msg["role"] == "user":
                 bubble_parts.append(
-                    f'<div class="chat-row chat-row-user">'
-                    f'<div class="chat-bubble chat-bubble-user">{msg["content"]}</div>'
-                    f'<div class="chat-avatar chat-avatar-user">🧑</div>'
-                    f'</div>'
+                    '<div class="chat-row chat-row-user">'
+                    '<div class="chat-bubble chat-bubble-user">' + msg["content"] + '</div>'
+                    '<div class="chat-avatar chat-avatar-user">U</div>'
+                    '</div>'
                 )
             else:
                 bubble_parts.append(
-                    f'<div class="chat-row chat-row-bot">'
-                    f'<div class="chat-avatar chat-avatar-bot">🤖</div>'
-                    f'<div class="chat-bubble chat-bubble-bot">{msg["content"]}</div>'
-                    f'</div>'
+                    '<div class="chat-row chat-row-bot">'
+                    '<div class="chat-avatar chat-avatar-bot">AI</div>'
+                    '<div class="chat-bubble chat-bubble-bot">' + msg["content"] + '</div>'
+                    '</div>'
                 )
         bubbles_html = "".join(bubble_parts)
 
-    st.markdown(f'<div class="chat-scroll">{bubbles_html}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chat-scroll">' + bubbles_html + '</div>', unsafe_allow_html=True)
 
     if prompt := st.chat_input("Ask a question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        response = rag_chat(prompt)
+        if "last_retrieved" not in st.session_state:
+            st.session_state.last_retrieved = None
+        response, st.session_state.last_retrieved = rag_chat(prompt, st.session_state.last_retrieved)
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.rerun()
 

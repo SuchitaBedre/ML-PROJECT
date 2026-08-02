@@ -1,0 +1,10 @@
+﻿models/*.json
+models/*.pkl
+models/chroma_db/
+models/chroma_db_v3/
+models/*.zip
+*.local.bak
+__pycache__/
+*.pyc
+.venv/
+venv/

@@ -8,3 +8,5 @@ faiss-cpu
 anthropic
 sqlalchemy
 psycopg2-binary
+plotly
+sentence-transformers
