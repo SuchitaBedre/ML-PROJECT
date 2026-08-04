@@ -25,6 +25,9 @@ https://drive.google.com/file/d/1O_W2gLcYEMiqvvIzZka5DrgV0CYZpo29/view?usp=drive
 
 https://drive.google.com/file/d/1Kga3hlasWqepgtYkKoFVEMFENNvUj7_I/view?usp=drive_link
 
+## data folder zip file:
+https://drive.google.com/file/d/1UcSxORIf8b6TRkb06X6RRlHaRVVhn8kd/view?usp=drive_link
+
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
