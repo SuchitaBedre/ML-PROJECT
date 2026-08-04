@@ -21,6 +21,13 @@ https://drive.google.com/file/d/1O_W2gLcYEMiqvvIzZka5DrgV0CYZpo29/view?usp=drive
 
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+### folder structure of this project:
+
+https://drive.google.com/file/d/1oqrZZNZHDbi_YIRqzuBLwpAdryJ6HxF7/view?usp=drive_link
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 ## Dataset
 
 The preprocessed recipe dataset (`recipe_final_preprocessed.csv`, ~1.6GB, 1,132,366 rows, 20 columns) 
