@@ -20,15 +20,15 @@ New Preprocessed dataset -
 https://drive.google.com/file/d/1O_W2gLcYEMiqvvIzZka5DrgV0CYZpo29/view?usp=drive_link
 
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# final project folder structure and data file:
+=================================================
 
-### folder structure of this project:
+https://drive.google.com/drive/folders/15TaaqtfdY2ZKPkXHO-4bPgHoFDslf2mu?usp=drive_link
 
-https://drive.google.com/file/d/1Kga3hlasWqepgtYkKoFVEMFENNvUj7_I/view?usp=drive_link
-
-## data folder zip file:
-https://drive.google.com/file/d/1UcSxORIf8b6TRkb06X6RRlHaRVVhn8kd/view?usp=drive_link
-
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 
 
 ## Dataset
