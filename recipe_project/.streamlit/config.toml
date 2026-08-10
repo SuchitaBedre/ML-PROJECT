@@ -1,9 +1,0 @@
-[theme]
-primaryColor = "#1D9E75"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F5F5F5"
-textColor = "#222222"
-font = "sans serif"
-
-[server]
-enableStaticServing = true
